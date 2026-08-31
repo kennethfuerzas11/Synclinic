@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Poppins', system-ui, sans-serif;
+  --color-nu-navy: #003366;
+  --color-nu-navy-dark: #002244;
+  --color-nu-gold: #C9A227;
+  --color-nu-gold-light: #E8C84A;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #003366 #F5F5F5;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  min-width: 320px;
+  background-color: #f4f7f5;
+  color: #1a1a2e;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input, select, textarea {
+  font-family: 'Poppins', system-ui, sans-serif;
+}
+
+button, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgb(201 162 39 / 55%);
+  outline-offset: 2px;
+}
+
+.auth-shell {
+  background-color: #eaf2ee;
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 60%) 25%, transparent 25%), linear-gradient(225deg, rgb(255 255 255 / 60%) 25%, transparent 25%);
+  background-position: 0 0, 20px 20px;
+  background-size: 40px 40px;
+}
+
+@media (max-width: 480px) {
+  .auth-panel {
+    box-shadow: 0 18px 42px rgb(0 51 102 / 16%);
+  }
+}
