@@ -747,3 +747,21 @@ tbody tr:nth-child(even) {
     padding-right: 20px;
   }
 }
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap .input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+}

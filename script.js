@@ -369,4 +369,76 @@ render();
     childList: true,
     subtree: true,
   });
-})();
+fi = (l, n, t = "text", p = "") => {
+  const isPassword = t === "password";
+
+  return `
+    <div class="field">
+      <label>${l} <b class="req">*</b></label>
+
+      <div class="${isPassword ? "password-wrap" : ""}">
+        <input
+          class="input"
+          name="${n}"
+          type="${t}"
+          placeholder="${p}"
+          required
+        >
+
+        ${
+          isPassword
+            ? `
+              <button
+                type="button"
+                class="password-toggle"
+                aria-label="Show password"
+              >👁</button>
+            `
+            : ""
+        }
+      </div>
+    </div>
+  `;
+},
+  se = (l, n, x, p) =>
+    `<div class="field">
+      <label>${l} <b class="req">*</b></label>
+      <select class="select" name="${n}" required>
+        ${op(x, p)}
+      </select>
+    </div>`;
+document.addEventListener("click", (event) => {
+  const toggle = event.target.closest(".password-toggle");
+  if (!toggle) return;
+
+  const input = toggle.parentElement.querySelector("input");
+  const showPassword = input.type === "password";
+
+  input.type = showPassword ? "text" : "password";
+  toggle.textContent = showPassword ? "🙈" : "👁";
+  toggle.setAttribute("aria-label", showPassword ? "Hide password" : "Show password");
+});
+
+new MutationObserver(addPasswordEyes).observe(document.querySelector("#app"), {
+  childList: true,
+  subtree: true,
+});
+
+addPasswordEyes();
+document.addEventListener("click", (event) => {
+  const toggle = event.target.closest(".password-toggle");
+
+  if (!toggle) {
+    return;
+  }
+
+  const input = toggle.parentElement.querySelector("input");
+  const hidden = input.type === "password";
+
+  input.type = hidden ? "text" : "password";
+  toggle.textContent = hidden ? "🙈" : "👁";
+  toggle.setAttribute(
+    "aria-label",
+    hidden ? "Hide password" : "Show password",
+  );
+});
