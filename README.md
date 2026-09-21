@@ -20,10 +20,9 @@ DEVELOPMENT TEAM / GROUP MEMBERS
 3. Banez, Mhyca
 4. Delamide, Rainniel
 5. Higuchi, Kenji
-5. Mallari, Rasheed
-6. Santos, Jared
-7. Tuazon, Tom
-8. Mallari, Rasheed 
+6. Mallari, Rasheed
+7. Santos, Jared
+8. Tuazon, Tom
 
 ------------------------------------------------------------------------
 KEY FEATURES
