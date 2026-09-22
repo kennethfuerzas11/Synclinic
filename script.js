@@ -13,23 +13,23 @@ const A = document.querySelector("#app"),
     status: "All",
   };
 const T = [
-    "08:00 AM",
-    "08:30 AM",
-    "09:00 AM",
-    "09:30 AM",
-    "10:00 AM",
-    "10:30 AM",
-    "11:00 AM",
-    "11:30 AM",
-    "01:00 PM",
-    "01:30 PM",
-    "02:00 PM",
-    "02:30 PM",
-    "03:00 PM",
-    "03:30 PM",
-    "04:00 PM",
-    "04:30 PM",
-  ],
+  "08:00 AM",
+  "08:30 AM",
+  "09:00 AM",
+  "09:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM",
+  "01:00 PM",
+  "01:30 PM",
+  "02:00 PM",
+  "02:30 PM",
+  "03:00 PM",
+  "03:30 PM",
+  "04:00 PM",
+  "04:30 PM",
+],
   S = [
     "General Consultation",
     "Dental Check-up",
@@ -173,8 +173,8 @@ let NS = [
   ],
 ];
 const op = (x, p) =>
-    `<option value="">${p}</option>` +
-    x.map((y) => `<option>${y}</option>`).join(""),
+  `<option value="">${p}</option>` +
+  x.map((y) => `<option>${y}</option>`).join(""),
   fi = (l, n, t = "text", p = "") =>
     `<div class="field"><label>${l} <b class="req">*</b></label><input class="input" name="${n}" type="${t}" placeholder="${p}" required></div>`,
   se = (l, n, x, p) =>
@@ -369,10 +369,10 @@ render();
     childList: true,
     subtree: true,
   });
-fi = (l, n, t = "text", p = "") => {
-  const isPassword = t === "password";
+  fi = (l, n, t = "text", p = "") => {
+    const isPassword = t === "password";
 
-  return `
+    return `
     <div class="field">
       <label>${l} <b class="req">*</b></label>
 
@@ -385,60 +385,60 @@ fi = (l, n, t = "text", p = "") => {
           required
         >
 
-        ${
-          isPassword
-            ? `
+        ${isPassword
+        ? `
               <button
                 type="button"
                 class="password-toggle"
                 aria-label="Show password"
               >👁</button>
             `
-            : ""
-        }
+        : ""
+      }
       </div>
     </div>
   `;
-},
-  se = (l, n, x, p) =>
-    `<div class="field">
+  },
+    se = (l, n, x, p) =>
+      `<div class="field">
       <label>${l} <b class="req">*</b></label>
       <select class="select" name="${n}" required>
         ${op(x, p)}
       </select>
     </div>`;
-document.addEventListener("click", (event) => {
-  const toggle = event.target.closest(".password-toggle");
-  if (!toggle) return;
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest(".password-toggle");
+    if (!toggle) return;
 
-  const input = toggle.parentElement.querySelector("input");
-  const showPassword = input.type === "password";
+    const input = toggle.parentElement.querySelector("input");
+    const showPassword = input.type === "password";
 
-  input.type = showPassword ? "text" : "password";
-  toggle.textContent = showPassword ? "🙈" : "👁";
-  toggle.setAttribute("aria-label", showPassword ? "Hide password" : "Show password");
-});
+    input.type = showPassword ? "text" : "password";
+    toggle.textContent = showPassword ? "🙈" : "👁";
+    toggle.setAttribute("aria-label", showPassword ? "Hide password" : "Show password");
+  });
 
-new MutationObserver(addPasswordEyes).observe(document.querySelector("#app"), {
-  childList: true,
-  subtree: true,
-});
+  new MutationObserver(addPasswordEyes).observe(document.querySelector("#app"), {
+    childList: true,
+    subtree: true,
+  });
 
-addPasswordEyes();
-document.addEventListener("click", (event) => {
-  const toggle = event.target.closest(".password-toggle");
+  addPasswordEyes();
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest(".password-toggle");
 
-  if (!toggle) {
-    return;
-  }
+    if (!toggle) {
+      return;
+    }
 
-  const input = toggle.parentElement.querySelector("input");
-  const hidden = input.type === "password";
+    const input = toggle.parentElement.querySelector("input");
+    const hidden = input.type === "password";
 
-  input.type = hidden ? "text" : "password";
-  toggle.textContent = hidden ? "🙈" : "👁";
-  toggle.setAttribute(
-    "aria-label",
-    hidden ? "Hide password" : "Show password",
-  );
-});
+    input.type = hidden ? "text" : "password";
+    toggle.textContent = hidden ? "🙈" : "👁";
+    toggle.setAttribute(
+      "aria-label",
+      hidden ? "Hide password" : "Show password",
+    );
+  });
+})();
