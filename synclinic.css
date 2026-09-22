@@ -77,10 +77,10 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #eaf2ee;
+  background: var(--n);
   background-image:
-    linear-gradient(135deg, #fff9 25%, transparent 25%),
-    linear-gradient(225deg, #fff9 25%, transparent 25%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%);
   background-size: 40px 40px;
 }
 
@@ -106,13 +106,14 @@ button {
 
 .brand b {
   display: block;
-  color: var(--n);
+  color: #ffffff;
   font-size: 24px;
 }
 
 .brand small {
-  color: #475569;
+  color: #ffffff;
   font-size: 11px;
+  opacity: 0.85;
 }
 
 .gold {
@@ -254,7 +255,7 @@ button {
 
 .auth footer {
   padding: 0 16px 24px;
-  color: #64748b;
+  color: #ffffff;
   text-align: center;
   font-size: 11px;
 }
