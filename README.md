@@ -42,4 +42,4 @@ GETTING STARTED
 
 3. Follow project setup instructions in the source directory.
 
-"Feature text from the demo branch."
+"Production text from the main branch."
