@@ -41,3 +41,5 @@ GETTING STARTED
    cd Synclinic
 
 3. Follow project setup instructions in the source directory.
+
+"Feature text from the demo branch."
