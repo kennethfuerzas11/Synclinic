@@ -4,7 +4,7 @@ const A = document.querySelector("#app"),
     role: sessionStorage.synRole || "",
     screen: "login",
     ar: "student",
-    view: "booking",
+    view: "home",
     bt: "student",
     tab: "apps",
     modal: "",
@@ -48,6 +48,9 @@ const T = [
     "BS Information Technology",
     "BS Psychology",
     "BS Tourism Management",
+    "BS Computer Engineering",
+    "BS Civil Engineering",
+    "BS Hospitality Management",
   ],
   E = [
     "Office of the Registrar",
@@ -246,8 +249,8 @@ function header() {
 
           <!-- Home -->
           <button
-            class="${D.view === "booking" ? "on" : ""}"
-            onclick="D.view='booking';render()"
+            class="${D.view === "home" ? "on" : ""}"
+            onclick="D.view='home';render()"
           >
             🏠 Home
           </button>
@@ -267,7 +270,7 @@ function header() {
 
           <!-- Staff Dashboard -->
           ${
-            D.role !== "student"
+            D.role === "staff"
               ? `
                 <button
                   class="${D.view === "dash" ? "on" : ""}"
@@ -288,10 +291,32 @@ function header() {
   `;
 }
 
-function booking() {
-  let f = D.bt === "faculty";
+function home() {
+  let isStudent = D.role === "student";
+  let roleLabel = isStudent ? "Student" : "Faculty / Employee";
+  let roleIcon = isStudent ? "🎓" : "👤";
 
-  return `<main class="content"><div class="booking"><h1 class="title">SynClinic Homepage</h1><p class="desc">Welcome to the University Health Office · National University Fairview</p><section class="panel"><div class="panelhead"><p>I am booking as a</p><div class="switch"><button class="${!f ? "on" : ""}" onclick="D.bt='student';render()">🎓 Student</button><button class="${f ? "on" : ""}" onclick="D.bt='faculty';render()">👤 Faculty / Employee</button></div></div><div class="gold"></div><form class="form" id="book">${f ? `<div class="grid2">${fi("Employee Name", "name", "text", "Last Name, First Name M.I.")}${se("Office / Department", "id", E, "Select department")}</div>${fi("Purpose of Visit", "purpose", "text", "Briefly describe your reason for visiting...")}` : `<div class="grid2">${fi("Student ID", "id", "text", "e.g. 2024-10234")}${fi("Full Name", "name", "text", "Last Name, First Name M.I.")}<div style="grid-column:1/-1">${se("Program", "program", P, "Select your program")}</div>${se("Year Level", "year", ["1st Year", "2nd Year", "3rd Year", "4th Year", "SHS Grade 11", "SHS Grade 12"], "Select year level")}<div class="field"><label>Student Status <b class="req">*</b></label><div class="radios"><label><input type="radio" name="new" value="no" checked> ↩ Continuing</label><label><input type="radio" name="new" value="yes" onchange="$('#advice').classList.remove('hide')"> 🆕 New</label></div></div></div><div id="advice" class="note hide"><b>New Student Advisory</b><br>New students without an active NUIS account will be recorded manually by clinic staff and synced once activated.</div>${fi("Purpose of Visit", "purpose", "text", "Briefly describe your reason for visiting...")}`}<div class="divider"></div><p class="sched">Appointment Schedule</p><div class="grid3">${fi("Select Date", "date", "date")}${se("Select Time", "time", T, "Choose slot")}${se("Select Service", "service", S, "Choose service")}</div><div class="summary hide" id="summary"></div><button class="primary">Book Appointment</button><p class="foot">By booking, you agree to attend your scheduled appointment on time. Walk-ins remain subject to availability.</p></form></section></div></main>`;
+  return `<main class="content"><div class="booking">
+    <h1 class="title">SynClinic Homepage</h1>
+    <p class="desc">Welcome to the University Health Office · National University Fairview</p>
+    <section class="panel">
+      <div class="panelhead">
+        <p>${roleIcon} You are signed in as <b>${roleLabel}</b></p>
+      </div>
+      <div class="gold"></div>
+      <div class="form">
+        <h2>Appointment Request</h2>
+        <p class="desc">Schedule a visit with the University Health Office.</p>
+        <button class="primary" onclick="D.view='booking';render()">📝 Book Appointment</button>
+      </div>
+    </section>
+  </div></main>`;
+}
+
+function booking() {
+  let f = D.role === "faculty";
+
+  return `<main class="content"><div class="booking"><h1 class="title">${f ? "Faculty / Employee Appointment" : "Student Appointment"}</h1><p class="desc">Welcome to the University Health Office · National University Fairview</p><section class="panel"><div class="panelhead"><p>Booking as <b>${f ? "👤 Faculty / Employee" : "🎓 Student"}</b></p></div><div class="gold"></div><form class="form" id="book">${f ? `<div class="grid2">${fi("Employee Name", "name", "text", "Last Name, First Name M.I.")}${se("Office / Department", "id", E, "Select department")}</div>${fi("Purpose of Visit", "purpose", "text", "Briefly describe your reason for visiting...")}` : `<div class="grid2">${fi("Student ID", "id", "text", "e.g. 2024-10234")}${fi("Full Name", "name", "text", "Last Name, First Name M.I.")}<div style="grid-column:1/-1">${se("Program", "program", P, "Select your program")}</div>${se("Year Level", "year", ["1st Year", "2nd Year", "3rd Year", "4th Year", "SHS Grade 11", "SHS Grade 12"], "Select year level")}<div class="field"><label>Student Status <b class="req">*</b></label><div class="radios"><label><input type="radio" name="new" value="no" checked> ↩ Continuing</label><label><input type="radio" name="new" value="yes" onchange="$('#advice').classList.remove('hide')"> 🆕 New</label></div></div></div><div id="advice" class="note hide"><b>New Student Advisory</b><br>New students without an active NUIS account will be recorded manually by clinic staff and synced once activated.</div>${fi("Purpose of Visit", "purpose", "text", "Briefly describe your reason for visiting...")}`}<div class="divider"></div><p class="sched">Appointment Schedule</p><div class="grid3">${fi("Select Date", "date", "date")}${se("Select Time", "time", T, "Choose slot")}${se("Select Service", "service", S, "Choose service")}</div><div class="summary hide" id="summary"></div><button class="primary">Book Appointment</button><p class="foot">By booking, you agree to attend your scheduled appointment on time. Walk-ins remain subject to availability.</p></form></section></div></main>`;
 }
 
 function badge(x) {
@@ -352,7 +377,7 @@ function modal() {
         ["Purpose", f.get("purpose")],
       ];
 
-    return `<div class="backdrop"><section class="modal"><div class="modal-head"><h2>Confirm Appointment</h2><p>Please review your details before submitting.</p></div><div class="modal-body">${r.map((x) => `<div class="detail"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("")}</div><div class="modal-actions"><button class="secondary" onclick="D.modal='';render()">Go Back</button><button class="primary" onclick="D.modal='booked';D.ref=(D.bt==='student'?'STU':'EMP')+'-'+Date.now().toString().slice(-7);render()">Confirm Booking</button></div></section></div>`;
+    return `<div class="backdrop"><section class="modal"><div class="modal-head"><h2>Confirm Appointment</h2><p>Please review your details before submitting.</p></div><div class="modal-body">${r.map((x) => `<div class="detail"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("")}</div><div class="modal-actions"><button class="secondary" onclick="D.modal='';render()">Go Back</button><button class="primary" onclick="D.modal='booked';D.ref=(D.role==='student'?'STU':'EMP')+'-'+Date.now().toString().slice(-7);render()">Confirm Booking</button></div></section></div>`;
   }
 
   if (D.modal === "booked" || D.modal === "synced") {
@@ -383,7 +408,9 @@ function modal() {
 
 function render() {
   A.innerHTML = D.role
-    ? header() + (D.view === "dash" ? dash() : booking()) + modal()
+    ? header() +
+      (D.view === "dash" ? dash() : D.view === "home" ? home() : booking()) +
+      modal()
     : auth();
 
   let a = $("#auth"),
@@ -413,8 +440,9 @@ function render() {
         $("#err").classList.remove("hide");
       } else {
         D.role = D.ar;
+        D.bt = D.role;
         sessionStorage.synRole = D.role;
-        D.view = D.role === "staff" ? "dash" : "booking";
+        D.view = D.role === "staff" ? "dash" : "home";
         render();
       }
     };
