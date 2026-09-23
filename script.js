@@ -320,6 +320,7 @@ function dash() {
     n = [
       x.length,
       x.filter((a) => a[8] === "Pending").length,
+      x.filter((a) => a[8] === "Confirmed").length,
       x.filter((a) => a[8] === "Completed").length,
       x.filter((a) => a[8] === "Cancelled").length,
       NS.length,
@@ -327,6 +328,7 @@ function dash() {
     z = [
       ["📅", "Today's Appointments", "#ebf0f8", "#003366"],
       ["⏳", "Pending", "#fef9ec", "#92400e"],
+      ["✓", "Confirmed", "#eff6ff", "#1d4ed8"],
       ["✅", "Completed", "#ecfdf5", "#065f46"],
       ["🚫", "Cancelled", "#fef2f2", "#991b1b"],
       ["🆕", "New Students", "#f5f3ff", "#5b21b6"],
