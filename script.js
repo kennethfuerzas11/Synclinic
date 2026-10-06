@@ -179,8 +179,37 @@ let NS = [
 const op = (x, p) =>
     `<option value="">${p}</option>` +
     x.map((y) => `<option>${y}</option>`).join(""),
-  fi = (l, n, t = "text", p = "") =>
-    `<div class="field"><label>${l} <b class="req">*</b></label><input class="input" name="${n}" type="${t}" placeholder="${p}" required></div>`,
+fi = (l, n, t = "text", p = "") =>
+  `<div class="field">
+    <label>${l} <b class="req">*</b></label>
+    ${
+      t === "password"
+        ? `<div class="password-wrap">
+            <input
+              class="input"
+              name="${n}"
+              type="password"
+              placeholder="${p}"
+              minlength="6"
+              required
+            >
+            <button
+              type="button"
+              class="password-toggle"
+              aria-label="Show password"
+              onclick="togglePassword(this)"
+            >👁</button>
+          </div>`
+        : `<input
+            class="input"
+            name="${n}"
+            type="${t}"
+            placeholder="${p}"
+            ${t === "email" ? 'autocomplete="email"' : ""}
+            required
+          >`
+    }
+  </div>`,
   se = (l, n, x, p) =>
     `<div class="field"><label>${l} <b class="req">*</b></label><select class="select" name="${n}" required>${op(x, p)}</select></div>`;
 
@@ -392,34 +421,125 @@ function render() {
     b = $("#book"),
     q = $("#quick");
 
-  if (a)
-    a.onsubmit = (e) => {
-      e.preventDefault();
+if (a) {
+  a.onsubmit = (e) => {
+    e.preventDefault();
 
-      let f = new FormData(a),
-        err =
-          !f.get(D.screen === "signup" ? "name" : "id") ||
-          !f.get("password")
-            ? "Please fill in all fields."
-            : f.get("password").length < 6
-              ? "Password must be at least 6 characters."
-              : D.screen === "signup" &&
-                  f.get("password") !== f.get("confirm")
-                ? "Passwords do not match."
-                : D.screen === "signup" && !f.get("agree")
-                  ? "Please agree to the terms and conditions."
-                  : "";
+    const f = new FormData(a);
+    const isSignup = D.screen === "signup";
 
-      if (err) {
-        $("#err").textContent = "⚠ " + err;
-        $("#err").classList.remove("hide");
-      } else {
-        D.role = D.ar;
-        sessionStorage.synRole = D.role;
-        D.view = D.role === "staff" ? "dash" : "booking";
-        render();
+    const name = (f.get("name") || "").trim();
+    const id = (f.get("id") || "").trim();
+    const email = (f.get("email") || "").trim();
+    const username = (f.get("username") || "").trim();
+    const password = f.get("password") || "";
+    const confirm = f.get("confirm") || "";
+    const agree = f.get("agree");
+
+    let err = "";
+
+    // =========================
+    // SIGN-UP VALIDATION
+    // =========================
+    if (isSignup) {
+
+      // Full Name
+      if (!name) {
+        err = "Full Name is required.";
       }
-    };
+
+      // Student / Employee / Staff ID
+      else if (!id) {
+        err = "ID is required.";
+      }
+
+      // Email
+      else if (!email) {
+        err = "Email Address is required.";
+      }
+
+      // Email format
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        err = "Please enter a valid email address.";
+      }
+
+      // Username
+      else if (!username) {
+        err = "Username is required.";
+      }
+
+      // Password
+      else if (!password) {
+        err = "Password is required.";
+      }
+
+      // Minimum password length
+      else if (password.length < 6) {
+        err = "Password must be at least 6 characters.";
+      }
+
+      // Confirm password
+      else if (!confirm) {
+        err = "Please confirm your password.";
+      }
+
+      // Password match
+      else if (password !== confirm) {
+        err = "Passwords do not match.";
+      }
+
+      // Terms and conditions
+      else if (!agree) {
+        err = "Please agree to the terms and conditions.";
+      }
+    }
+
+    // =========================
+    // LOGIN VALIDATION
+    // =========================
+    else {
+
+      // Username / Email
+      if (!id) {
+        err = "Username or Email is required.";
+      }
+
+      // Password
+      else if (!password) {
+        err = "Password is required.";
+      }
+
+      // Minimum password length
+      else if (password.length < 6) {
+        err = "Password must be at least 6 characters.";
+      }
+    }
+
+    // =========================
+    // DISPLAY VALIDATION ERROR
+    // =========================
+    if (err) {
+      const errorBox = $("#err");
+
+      errorBox.textContent = "⚠ " + err;
+      errorBox.classList.remove("hide");
+
+      return;
+    }
+
+    // =========================
+    // SUCCESS
+    // =========================
+    D.role = D.ar;
+    sessionStorage.synRole = D.role;
+
+    D.view = D.role === "staff"
+      ? "dash"
+      : "booking";
+
+    render();
+  };
+}
 
   if (b) {
     b.oninput = () => {
@@ -468,6 +588,22 @@ function setStatus(id, x) {
   render();
 }
 
+function togglePassword(button) {
+  const input = button.parentElement.querySelector("input");
+
+  if (!input) return;
+
+  if (input.type === "password") {
+    input.type = "text";
+    button.textContent = "🙈";
+    button.setAttribute("aria-label", "Hide password");
+  } else {
+    input.type = "password";
+    button.textContent = "👁";
+    button.setAttribute("aria-label", "Show password");
+  }
+}
+
 render();
 
 (() => {
@@ -486,86 +622,5 @@ render();
   new MutationObserver(preventPastDates).observe(document.body, {
     childList: true,
     subtree: true,
-  });
-
-  fi = (l, n, t = "text", p = "") => {
-    const isPassword = t === "password";
-
-    return `
-    <div class="field">
-      <label>${l} <b class="req">*</b></label>
-
-      <div class="${isPassword ? "password-wrap" : ""}">
-        <input
-          class="input"
-          name="${n}"
-          type="${t}"
-          placeholder="${p}"
-          required
-        >
-
-        ${
-          isPassword
-            ? `
-              <button
-                type="button"
-                class="password-toggle"
-                aria-label="Show password"
-              >👁</button>
-            `
-            : ""
-        }
-      </div>
-    </div>
-  `;
-  };
-
-  se = (l, n, x, p) =>
-    `<div class="field">
-      <label>${l} <b class="req">*</b></label>
-      <select class="select" name="${n}" required>
-        ${op(x, p)}
-      </select>
-    </div>`;
-
-  document.addEventListener("click", (event) => {
-    const toggle = event.target.closest(".password-toggle");
-
-    if (!toggle) return;
-
-    const input = toggle.parentElement.querySelector("input");
-    const showPassword = input.type === "password";
-
-    input.type = showPassword ? "text" : "password";
-    toggle.textContent = showPassword ? "🙈" : "👁";
-    toggle.setAttribute(
-      "aria-label",
-      showPassword ? "Hide password" : "Show password",
-    );
-  });
-
-  new MutationObserver(addPasswordEyes).observe(document.querySelector("#app"), {
-    childList: true,
-    subtree: true,
-  });
-
-  addPasswordEyes();
-
-  document.addEventListener("click", (event) => {
-    const toggle = event.target.closest(".password-toggle");
-
-    if (!toggle) {
-      return;
-    }
-
-    const input = toggle.parentElement.querySelector("input");
-    const hidden = input.type === "password";
-
-    input.type = hidden ? "text" : "password";
-    toggle.textContent = hidden ? "🙈" : "👁";
-    toggle.setAttribute(
-      "aria-label",
-      hidden ? "Hide password" : "Show password",
-    );
   });
 })();
