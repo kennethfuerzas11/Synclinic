@@ -1,0 +1,15 @@
+{
+  "firestore": {
+    "rules": "Firebase/Database/firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "Firebase/Database/firestore.rules",
+      "Synclinic/**"
+    ]
+  }
+}
