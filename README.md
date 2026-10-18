@@ -9,7 +9,7 @@ PROJECT OVERVIEW
 ------------------------------------------------------------------------
 Synclinic is a streamlined clinic appointment and reservation booking 
 system designed to simplify patient scheduling, clinic management, and 
-consultation workflows.
+consultation workflows for NU Fairview Clinic
 
 ------------------------------------------------------------------------
 DEVELOPMENT TEAM / GROUP MEMBERS
