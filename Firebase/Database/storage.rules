@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isClinicStaff() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "staff";
+    }
+
+    function appointmentIsConfirmed(appointmentId) {
+      return firestore.get(
+        /databases/(default)/documents/appointments/$(appointmentId)
+      ).data.status == "Confirmed";
+    }
+
+    match /appointments/{appointmentId}/{fileName} {
+      allow create: if isClinicStaff()
+        && appointmentIsConfirmed(appointmentId)
+        && fileName.matches("^[0-9]+-[A-Za-z0-9._-]+$")
+        && request.resource.size <= 10 * 1024 * 1024
+        && (
+          request.resource.contentType == "application/pdf"
+          || request.resource.contentType.matches("^image/.*$")
+        );
+      allow read, delete: if isClinicStaff();
+      allow update: if false;
+    }
+  }
+}

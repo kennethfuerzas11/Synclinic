@@ -2,28 +2,150 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    // Assumed data model:
+    // users/{uid}: private account profile; student, faculty, or staff role.
+    // clinicSettings/general: service list and default booking capacity.
+    // appointments/{id}: patient identity, appointment details, status, and staff notes.
+    // slotReservations/{date_time}: atomic appointment count for each slot.
+    // slotBookings/{date_time_uid}: unique active booking lock for a patient and slot.
+    // slotLimits/{date_time}: staff-defined capacity override for one slot.
+    // blockedSlots/{date_time}: staff-defined no-doctor time slot.
+    // newStudents/{id}: new-student details associated with an appointment.
+    // Appointment attachment files are stored separately in Firebase Storage.
+
+    function isAuthenticated() {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged() {
+      return !("ownerUid" in request.resource.data)
+        || request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !("ownerUid" in request.resource.data)
+        || request.resource.data.ownerUid == resource.data.ownerUid;
+    }
+
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string
+        && email.size() <= 254
+        && email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    }
+
+    function isValidIdentifier(identifier) {
+      return identifier is string
+        && identifier.size() > 0
+        && identifier.size() <= 100;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(data, [
+          "name", "email", "username", "age", "sex", "role", "address",
+          "program", "department", "year", "identifier", "createdAt",
+          "office", "phone", "emergencyContact", "updatedAt"
+        ])
+        && hasRequiredFields(data, [
+          "name", "email", "username", "role", "identifier", "createdAt"
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 150
+        && isValidEmail(data.email)
+        && data.username is string
+        && data.username.size() > 0
+        && data.username.size() <= 100
+        && data.role in ["student", "faculty", "staff"]
+        && isValidIdentifier(data.identifier)
+        && data.createdAt is timestamp
+        && (!("age" in data) || (data.age is string && data.age.size() <= 3))
+        && (!("sex" in data) || (data.sex is string && data.sex.size() <= 40))
+        && (!("address" in data) || (data.address is string && data.address.size() <= 300))
+        && (!("program" in data) || (data.program is string && data.program.size() <= 150))
+        && (!("department" in data) || (data.department is string && data.department.size() <= 150))
+        && (!("year" in data) || (data.year is string && data.year.size() <= 40))
+        && (!("office" in data) || (data.office is string && data.office.size() <= 150))
+        && (!("phone" in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!("emergencyContact" in data) || (data.emergencyContact is string && data.emergencyContact.size() <= 150))
+        && (!("updatedAt" in data) || data.updatedAt is timestamp)
+        && data.role in ["student", "faculty", "staff"];
+    }
+
     function isClinicStaff() {
-      return signedIn()
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "staff";
     }
 
-    function clinicSettingsPath() {
-      return /databases/$(database)/documents/clinicSettings/general;
+    function isAdministrator() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    function isValidTime(time) {
+      return time in [
+        "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM",
+        "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+        "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+        "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM"
+      ];
+    }
+
+    function isValidDate(date) {
+      return date is string && date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
     }
 
     function slotReservationPath(date, time) {
       return /databases/$(database)/documents/slotReservations/$(date + "_" + time);
     }
 
-    function configuredSlotCapacity() {
-      return exists(clinicSettingsPath())
-        && get(clinicSettingsPath()).data.slotCapacity is int
-        ? get(clinicSettingsPath()).data.slotCapacity
-        : 5;
+    function slotLimitPath(date, time) {
+      return /databases/$(database)/documents/slotLimits/$(date + "_" + time);
+    }
+
+    function blockedSlotPath(date, time) {
+      return /databases/$(database)/documents/blockedSlots/$(date + "_" + time);
+    }
+
+    function slotBookingPath(uid, date, time) {
+      return /databases/$(database)/documents/slotBookings/$(date + "_" + time + "_" + uid);
+    }
+
+    function configuredSlotCapacity(date, time) {
+      let specificLimit = slotLimitPath(date, time);
+      let generalSettings = /databases/$(database)/documents/clinicSettings/general;
+      return exists(specificLimit)
+        ? get(specificLimit).data.capacity
+        : (exists(generalSettings) && get(generalSettings).data.slotCapacity is int
+          ? get(generalSettings).data.slotCapacity
+          : 5);
+    }
+
+    function isValidBookingLock(appointmentId, appointmentData) {
+      let lockPath = slotBookingPath(
+        appointmentData.ownerUid,
+        appointmentData.date,
+        appointmentData.time
+      );
+      return isClinicStaff()
+        || (
+          existsAfter(lockPath)
+          && getAfter(lockPath).data.ownerUid == appointmentData.ownerUid
+          && getAfter(lockPath).data.appointmentId == appointmentId
+          && getAfter(lockPath).data.date == appointmentData.date
+          && getAfter(lockPath).data.time == appointmentData.time
+        );
     }
 
     function validAppointmentReservation(appointmentId, appointmentData) {
@@ -33,72 +155,187 @@ service cloud.firestore {
       let previousCount = exists(reservationPath) ? get(reservationPath).data.count : 0;
       return !exists(appointmentPath)
         && existsAfter(reservationPath)
+        && existsAfter(appointmentPath)
         && getAfter(appointmentPath).data.createdByUid == request.auth.uid
         && reservation.lastAppointmentId == appointmentId
         && reservation.date == appointmentData.date
         && reservation.time == appointmentData.time
         && reservation.count == previousCount + 1
-        && reservation.count <= configuredSlotCapacity();
+        && reservation.count <= configuredSlotCapacity(appointmentData.date, appointmentData.time)
+        && !exists(blockedSlotPath(appointmentData.date, appointmentData.time))
+        && isValidBookingLock(appointmentId, appointmentData);
+    }
+
+    function isValidAppointment(data, appointmentId) {
+      return hasOnlyAllowedFields(data, [
+          "referenceId", "ownerUid", "createdByUid", "name", "identifier",
+          "program", "year", "department", "patientType", "date", "time",
+          "service", "purpose", "status", "newStudent", "createdAt",
+          "updatedAt", "doctorRemarks", "attachmentPath", "cancellationReason",
+          "cancellationDetails"
+        ])
+        && hasRequiredFields(data, [
+          "referenceId", "ownerUid", "createdByUid", "name", "identifier",
+          "program", "year", "department", "patientType", "date", "time",
+          "service", "purpose", "status", "newStudent", "createdAt"
+        ])
+        && data.referenceId == appointmentId
+        && data.ownerUid is string
+        && data.ownerUid.size() > 0
+        && data.createdByUid is string
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 150
+        && data.identifier is string
+        && data.identifier.size() <= 100
+        && data.program is string
+        && data.program.size() <= 150
+        && data.year is string
+        && data.year.size() <= 40
+        && data.department is string
+        && data.department.size() <= 150
+        && data.patientType in ["Student", "Employee"]
+        && isValidDate(data.date)
+        && isValidTime(data.time)
+        && data["service"] is string
+        && data["service"].size() > 0
+        && data["service"].size() <= 100
+        && data.purpose is string
+        && data.purpose.size() <= 500
+        && data.status in ["Pending", "Confirmed", "Completed", "Cancelled"]
+        && data.newStudent is bool
+        && data.createdAt is timestamp
+        && (!("updatedAt" in data) || data.updatedAt is timestamp)
+        && (!("doctorRemarks" in data) || (data.doctorRemarks is string && data.doctorRemarks.size() <= 2000))
+        && (!("attachmentPath" in data)
+          || (data.attachmentPath is string
+            && data.attachmentPath.size() <= 300
+            && data.attachmentPath.matches("^appointments/[A-Za-z0-9_-]+/[0-9]+-[A-Za-z0-9._-]+$")))
+        && (!("cancellationReason" in data)
+          || data.cancellationReason in ["No show", "Patient asked to cancelled", "Others"])
+        && (!("cancellationDetails" in data)
+          || (data.cancellationDetails is string && data.cancellationDetails.size() <= 500));
+    }
+
+    function isOwnAppointment(data) {
+      let profilePath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isOwner(data.ownerUid)
+        && exists(profilePath)
+        && (
+          (data.patientType == "Student"
+            && get(profilePath).data.role == "student"
+            && get(profilePath).data.name == data.name
+            && get(profilePath).data.identifier == data.identifier)
+          || (data.patientType == "Employee"
+            && get(profilePath).data.role == "faculty"
+            && get(profilePath).data.name == data.name
+            && get(profilePath).data.identifier == data.identifier)
+        );
+    }
+
+    function isValidAppointmentCreate(data, appointmentId) {
+      return isAuthenticated()
+        && isValidAppointment(data, appointmentId)
+        && uidUnchanged()
+        && data.createdByUid == request.auth.uid
+        && data.status == "Pending"
+        && data.createdAt == request.time
+        && (isClinicStaff() || isOwnAppointment(data))
+        && validAppointmentReservation(appointmentId, data);
+    }
+
+    function isValidAppointmentUpdate(data, appointmentId) {
+      return isValidAppointment(data, appointmentId)
+        && uidNotModified()
+        && data.referenceId == resource.data.referenceId
+        && data.createdByUid == resource.data.createdByUid
+        && data.createdAt == resource.data.createdAt
+        && data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status", "updatedAt", "doctorRemarks", "attachmentPath",
+          "cancellationReason", "cancellationDetails"
+        ])
+        && (
+          (resource.data.status == "Pending" && data.status in ["Confirmed", "Cancelled"])
+          || (resource.data.status == "Confirmed" && data.status in ["Completed", "Cancelled"])
+        )
+        && (
+          data.status != "Completed"
+          || (
+            "doctorRemarks" in data
+            && data.doctorRemarks.size() > 0
+            && "attachmentPath" in data
+          )
+        )
+        && (
+          data.status != "Cancelled"
+          || (
+            "cancellationReason" in data
+            && (
+              data.cancellationReason != "Others"
+              || ("cancellationDetails" in data && data.cancellationDetails.size() > 0)
+            )
+          )
+        );
+    }
+
+    function isValidSlotLimit(data, slotId) {
+      return hasOnlyAllowedFields(data, ["date", "time", "capacity", "updatedAt", "updatedBy"])
+        && hasRequiredFields(data, ["date", "time", "capacity", "updatedAt", "updatedBy"])
+        && isValidDate(data.date)
+        && isValidTime(data.time)
+        && slotId == data.date + "_" + data.time
+        && data.capacity is int
+        && data.capacity >= 1
+        && data.capacity <= 500
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid;
+    }
+
+    function isValidBlockedSlot(data, slotId) {
+      return hasOnlyAllowedFields(data, ["date", "time", "updatedAt", "updatedBy"])
+        && hasRequiredFields(data, ["date", "time", "updatedAt", "updatedBy"])
+        && isValidDate(data.date)
+        && isValidTime(data.time)
+        && slotId == data.date + "_" + data.time
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid;
     }
 
     match /users/{userId} {
-      allow get: if signedIn() && (request.auth.uid == userId || isClinicStaff());
+      allow get: if isAuthenticated() && (isOwner(userId) || isClinicStaff());
       allow list: if isClinicStaff();
-      allow create: if signedIn()
+      allow create: if isAuthenticated()
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly([
-          "name", "email", "username", "age", "sex", "role", "address",
-          "program", "department", "year", "identifier", "createdAt",
-          "office", "phone", "emergencyContact", "updatedAt"
-        ])
-        && request.resource.data.keys().hasAll([
-          "name", "email", "username", "age", "sex", "role", "address",
-          "program", "department", "year", "identifier", "createdAt"
-        ])
-        && request.resource.data.role in ["student", "faculty", "staff"]
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.username is string
-        && request.resource.data.age is string
-        && request.resource.data.sex is string
-        && request.resource.data.address is string
-        && request.resource.data.program is string
-        && request.resource.data.department is string
-        && request.resource.data.year is string
-        && request.resource.data.identifier is string
+        && isValidUser(request.resource.data)
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.createdAt == request.time;
-      allow update: if signedIn()
-        && request.auth.uid == userId
+        && request.resource.data.createdAt == request.time
+        && (
+          request.resource.data.role in ["student", "faculty", "staff"]
+          || isAdministrator()
+        );
+      allow update: if isOwner(userId)
+        && isValidUser(request.resource.data)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "name", "email", "username", "age", "sex", "role", "address",
+          "name", "email", "username", "age", "sex", "address",
           "program", "department", "year", "identifier", "office",
           "phone", "emergencyContact", "updatedAt"
-        ])
-        && request.resource.data.role in ["student", "faculty", "staff"]
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.username is string
-        && request.resource.data.age is string
-        && request.resource.data.sex is string
-        && request.resource.data.address is string
-        && request.resource.data.program is string
-        && request.resource.data.department is string
-        && request.resource.data.year is string
-        && request.resource.data.identifier is string
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.updatedAt == request.time;
+        ]);
       allow delete: if false;
     }
 
     match /clinicSettings/{settingsId} {
-      allow read: if signedIn();
+      allow read: if isAuthenticated();
       allow create, update: if isClinicStaff()
         && settingsId == "general"
-        && request.resource.data.keys().hasOnly([
+        && hasOnlyAllowedFields(request.resource.data, [
           "services", "slotCapacity", "updatedAt", "updatedBy"
         ])
-        && request.resource.data.keys().hasAll(["updatedAt", "updatedBy"])
+        && hasRequiredFields(request.resource.data, ["updatedAt", "updatedBy"])
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedBy == request.auth.uid
         && (
@@ -121,27 +358,30 @@ service cloud.firestore {
     }
 
     match /slotReservations/{reservationId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
-        && reservationId == (request.resource.data.date + "_" + request.resource.data.time)
-        && request.resource.data.keys().hasOnly([
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && reservationId == request.resource.data.date + "_" + request.resource.data.time
+        && hasOnlyAllowedFields(request.resource.data, [
           "date", "time", "count", "lastAppointmentId", "updatedAt"
         ])
-        && request.resource.data.keys().hasAll([
+        && hasRequiredFields(request.resource.data, [
           "date", "time", "count", "lastAppointmentId", "updatedAt"
         ])
+        && isValidDate(request.resource.data.date)
+        && isValidTime(request.resource.data.time)
         && request.resource.data.count == 1
         && request.resource.data.updatedAt == request.time
         && validAppointmentReservation(
           request.resource.data.lastAppointmentId,
           getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data
         );
-      allow update: if signedIn()
-        && reservationId == (resource.data.date + "_" + resource.data.time)
+      allow update: if isAuthenticated()
+        && reservationId == resource.data.date + "_" + resource.data.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "count", "lastAppointmentId", "updatedAt"
         ])
         && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAppointmentId is string
         && (
           (
             request.resource.data.count == resource.data.count + 1
@@ -153,98 +393,88 @@ service cloud.firestore {
           || (
             isClinicStaff()
             && request.resource.data.count == resource.data.count - 1
+            && request.resource.data.count >= 0
             && exists(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId))
             && get(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.status in ["Pending", "Confirmed"]
-            && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.status in ["Cancelled", "Completed"]
-            && get(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.date == resource.data.date
-            && get(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.time == resource.data.time
+            && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.status == "Cancelled"
+            && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.date == resource.data.date
+            && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.lastAppointmentId)).data.time == resource.data.time
           )
         );
       allow delete: if false;
     }
 
+    match /slotBookings/{bookingId} {
+      allow read: if isAuthenticated()
+        && (isClinicStaff() || resource.data.ownerUid == request.auth.uid);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerUid == request.auth.uid
+        && bookingId == request.resource.data.date + "_" + request.resource.data.time + "_" + request.auth.uid
+        && hasOnlyAllowedFields(request.resource.data, [
+          "ownerUid", "appointmentId", "date", "time", "createdAt"
+        ])
+        && hasRequiredFields(request.resource.data, [
+          "ownerUid", "appointmentId", "date", "time", "createdAt"
+        ])
+        && isValidDate(request.resource.data.date)
+        && isValidTime(request.resource.data.time)
+        && request.resource.data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId))
+        && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.ownerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.date == request.resource.data.date
+        && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.time == request.resource.data.time;
+      allow update: if false;
+      allow delete: if isClinicStaff()
+        && existsAfter(/databases/$(database)/documents/appointments/$(resource.data.appointmentId))
+        && getAfter(/databases/$(database)/documents/appointments/$(resource.data.appointmentId)).data.status == "Cancelled";
+    }
+
+    match /slotLimits/{slotId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isClinicStaff()
+        && isValidSlotLimit(request.resource.data, slotId);
+      allow delete: if isClinicStaff();
+    }
+
+    match /blockedSlots/{slotId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isClinicStaff()
+        && isValidBlockedSlot(request.resource.data, slotId);
+      allow delete: if isClinicStaff();
+    }
+
     match /appointments/{appointmentId} {
       allow read: if isClinicStaff()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "referenceId", "ownerUid", "createdByUid", "name", "identifier",
-          "program", "year", "department", "patientType", "date", "time", "service",
-          "purpose", "status", "newStudent", "createdAt"
-        ])
-        && request.resource.data.keys().hasAll([
-          "referenceId", "ownerUid", "createdByUid", "name", "identifier",
-          "program", "year", "department", "patientType", "date", "time", "service",
-          "purpose", "status", "newStudent", "createdAt"
-        ])
-        && request.resource.data.referenceId == appointmentId
-        && request.resource.data.ownerUid is string
-        && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.identifier is string
-        && request.resource.data.program is string
-        && request.resource.data.year is string
-        && request.resource.data.department is string
-        && request.resource.data.status == "Pending"
-        && request.resource.data.patientType in ["Student", "Employee"]
-        && request.resource.data.newStudent is bool
-        && request.resource.data.date is string
-        && request.resource.data.date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-        && request.resource.data.time is string
-        && request.resource.data.service is string
-        && request.resource.data.purpose is string
-        && request.resource.data.createdAt == request.time
-        && validAppointmentReservation(appointmentId, request.resource.data)
-        && (
-          isClinicStaff()
-          || (
-            signedIn()
-            && request.resource.data.ownerUid == request.auth.uid
-            && (
-              (
-                request.resource.data.patientType == "Student"
-                && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "student"
-              )
-              || (
-                request.resource.data.patientType == "Employee"
-                && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "faculty"
-              )
-            )
-          )
-        );
+        || (isAuthenticated() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidAppointmentCreate(request.resource.data, appointmentId);
       allow update: if isClinicStaff()
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["status", "updatedAt"])
-        && request.resource.data.status in ["Pending", "Confirmed", "Completed", "Cancelled"]
-        && (
-          request.resource.data.status == resource.data.status
-          || (
-            resource.data.status in ["Pending", "Confirmed"]
-            && request.resource.data.status in ["Pending", "Confirmed", "Completed", "Cancelled"]
-          )
-        )
-        && request.resource.data.updatedAt == request.time;
+        && isValidAppointmentUpdate(request.resource.data, appointmentId);
       allow delete: if false;
     }
 
     match /newStudents/{studentId} {
       allow read: if isClinicStaff()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
+        || (isAuthenticated() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isAuthenticated()
+        && hasOnlyAllowedFields(request.resource.data, [
           "ownerUid", "appointmentId", "name", "identifier", "program",
           "year", "status", "createdAt"
         ])
-        && request.resource.data.keys().hasAll([
+        && hasRequiredFields(request.resource.data, [
           "ownerUid", "appointmentId", "name", "identifier", "program",
           "year", "status", "createdAt"
         ])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.appointmentId is string
         && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 150
         && request.resource.data.identifier is string
+        && request.resource.data.identifier.size() <= 100
         && request.resource.data.program is string
+        && request.resource.data.program.size() <= 150
         && request.resource.data.year is string
+        && request.resource.data.year.size() <= 40
         && request.resource.data.status == "Pending"
         && request.resource.data.createdAt == request.time
         && existsAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId))
@@ -255,16 +485,8 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.identifier == request.resource.data.identifier
         && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.program == request.resource.data.program
         && getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data.year == request.resource.data.year
-        && (
-          isClinicStaff()
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "student"
-        );
-      allow update: if isClinicStaff()
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["status", "updatedAt"])
-        && request.resource.data.status in ["Pending", "Reviewed"]
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if false;
+        && (isClinicStaff() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "student");
+      allow update, delete: if false;
     }
   }
 }

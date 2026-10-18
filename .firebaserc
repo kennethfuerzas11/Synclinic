@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "synclinic-563b5"
-  }
+  },
+  "targets": {
+    "synclinic-563b5": {
+      "hosting": {
+        "main": [
+          "synclinic-563b5"
+        ],
+        "staff": [
+          "synclinic-staff"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
